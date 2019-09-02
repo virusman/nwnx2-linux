@@ -34,6 +34,8 @@
 
 extern CNWNXNames names;
 
+const dword PLAYERID_ALL_GAMEMASTERS = -10;
+
 int (*pGetObjByOID)(void *pObjectClass, dword ObjID, void **buf);
 void *(*pRetObjByOID)(void *pServerExo, long ObjID);
 void *(*pGetPlayer)(void *pServerExo4, dword ObjID);
@@ -48,7 +50,8 @@ void (*CNWMessage__CreateWriteMessage)(CNWSMessage *pMessage, dword length, dwor
 void (*CNWSMessage__WriteGameObjUpdate_UpdateObject)(CNWSMessage *pMessage, CNWSPlayer *pPlayer, CNWSCreature *pCreature, CLastUpdateObject *pLUO, dword flags, dword AppearanceFlags);
 void (*CNWMessage__GetWriteMessage)(CNWSMessage *pMessage, char **ppData, dword *pLength);
 void (*CNWSMessage__SendServerToPlayerMessage)(CNWSMessage *pMessage, dword nPlayerID, byte type, byte subtype, char *dataPtr, dword length);
-void (*CNWSMessage__SendServerToPlayerPlayerList_All)(CNWSMessage *pMessage, CNWSPlayer *pPlayer);
+bool (*CNWSMessage__SendServerToPlayerPlayerList_Add)(CNWSMessage *pMessage, dword nPlayerId, CNWSPlayer *pNewPlayer);
+bool (*CNWSMessage__SendServerToPlayerPlayerList_All)(CNWSMessage *pMessage, CNWSPlayer *pPlayer);
 
 dword *ppServer = 0;
 void *pServer = 0;
@@ -588,6 +591,61 @@ ext:
     return 1;
 }
 
+void rand_str(char *dest, size_t length) {
+    char charset[] = "0123456789"
+                     "abcdefghijklmnopqrstuvwxyz"
+                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    while (length-- > 0) {
+        size_t index = (double) rand() / RAND_MAX * (sizeof charset - 1);
+        *dest++ = charset[index];
+    }
+    *dest = '\0';
+}
+
+dword nPlayerListAdd_PlayerId = -1;
+
+bool CNWSMessage__SendServerToPlayerPlayerList_Add_Hook(CNWSMessage *pMessage, dword nPlayerId, CNWSPlayer *pNewPlayer)
+{
+    nPlayerListAdd_PlayerId = nPlayerId;
+    return CNWSMessage__SendServerToPlayerPlayerList_Add(pMessage, nPlayerId, pNewPlayer);
+}
+
+void SendPlayerListAdd_WritePlayerName(CNWSMessage* msg, CExoString &value)
+{
+    names.Log(5, "SendPlayerListAdd_WritePlayerName: player %s, playerId %d\n", value.Text, nPlayerListAdd_PlayerId);
+    if (nPlayerListAdd_PlayerId != PLAYERID_ALL_GAMEMASTERS) {
+        char maskedPlayerName[17];
+        rand_str(maskedPlayerName, 16);
+        names.Log(5, "SendPlayerListAdd_WritePlayerName: replaced with %s\n", maskedPlayerName);
+        msg->WriteCExoString(CExoString(maskedPlayerName), 32);
+    } else {
+        msg->WriteCExoString(value, 32);
+    }
+}
+
+CNWSPlayer *pPlayerListAll_Player = NULL;
+
+bool CNWSMessage__SendServerToPlayerPlayerList_All_Hook(CNWSMessage *pMessage, CNWSPlayer *pPlayer)
+{
+    pPlayerListAll_Player = pPlayer;
+    return CNWSMessage__SendServerToPlayerPlayerList_All(pMessage, pPlayer);
+}
+
+void SendPlayerListAll_WritePlayerName(CNWSMessage* msg, CExoString &value)
+{
+    names.Log(5, "SendPlayerListAll_WritePlayerName: player %s, playerId: %d\n", value.Text, pPlayerListAll_Player->m_nPlayerID);
+    CNetLayerPlayerInfo *playerInfo = g_pAppManager->ServerExoApp->GetNetLayer()->GetPlayerInfo(pPlayerListAll_Player->m_nPlayerID);
+    if (playerInfo != NULL && !playerInfo->IsDM) {
+        char maskedPlayerName[17];
+        rand_str(maskedPlayerName, 16);
+        names.Log(5, "SendPlayerListAll_WritePlayerName: replaced with %s\n", maskedPlayerName);
+        msg->WriteCExoString(CExoString(maskedPlayerName), 32);
+    } else {
+        msg->WriteCExoString(value, 32);
+    }
+}
+
 void
 d_enable_write(unsigned long location)
 {
@@ -652,6 +710,11 @@ int HookFunctions()
     *(dword*)&pScriptThis = (dword)((char*)ppServer - 0x8);
 
     d_redirect(org_GetName, (unsigned long)GetNameHookProc, d_ret_code_nm, 13);
+
+    NX_HOOK(CNWSMessage__SendServerToPlayerPlayerList_Add, 0x080770A8, CNWSMessage__SendServerToPlayerPlayerList_Add_Hook, 5);
+    NX_HOOK_CALL(0x080772B8, (long)SendPlayerListAdd_WritePlayerName);
+    NX_HOOK(CNWSMessage__SendServerToPlayerPlayerList_All, 0x080774E4, CNWSMessage__SendServerToPlayerPlayerList_All_Hook, 5);
+    NX_HOOK_CALL(0x080777E0, (long)SendPlayerListAll_WritePlayerName);
 
     return 1;
 }
