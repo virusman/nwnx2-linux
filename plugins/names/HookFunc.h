@@ -21,7 +21,6 @@
 #define HookFunc_h_
 
 #include "typedefs.h"
-#include "NWNStructures.h"
 
 int HookFunctions();
 void InitConstants();

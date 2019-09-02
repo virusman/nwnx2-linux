@@ -27,13 +27,12 @@
 #define PAGESIZE 4096
 #endif
 
+#include "NWNXApi.h"
 #include "HookFunc.h"
 #include "CCustomNames.h"
 #include "NWNXNames.h"
-#include "AssemblyHelper.cpp"
 
 extern CNWNXNames names;
-AssemblyHelper asmhelp;
 
 int (*pGetObjByOID)(void *pObjectClass, dword ObjID, void **buf);
 void *(*pRetObjByOID)(void *pServerExo, long ObjID);
@@ -44,7 +43,6 @@ void *(*GetPlayerObject)(void *pPlayer);
 void *(*pGetPlayerByOID)(void *pThis, dword ObjID);
 void *(*pGetPlayerList)(void *pServerExo);
 void *(*pGetServerMessage)(void *pServerExo);
-void *(*pSendNewName)(void *pServerMessage, void *pPlayer, void *pObject);
 void *(*GetClientObjectByPlayerId)(void *pServerExoApp, dword nClientID, unsigned char flag);
 void (*CNWMessage__CreateWriteMessage)(CNWSMessage *pMessage, dword length, dword recipient, dword flag);
 void (*CNWSMessage__WriteGameObjUpdate_UpdateObject)(CNWSMessage *pMessage, CNWSPlayer *pPlayer, CNWSCreature *pCreature, CLastUpdateObject *pLUO, dword flags, dword AppearanceFlags);
@@ -52,10 +50,6 @@ void (*CNWMessage__GetWriteMessage)(CNWSMessage *pMessage, char **ppData, dword 
 void (*CNWSMessage__SendServerToPlayerMessage)(CNWSMessage *pMessage, dword nPlayerID, byte type, byte subtype, char *dataPtr, dword length);
 void (*CNWSMessage__SendServerToPlayerPlayerList_All)(CNWSMessage *pMessage, CNWSPlayer *pPlayer);
 
-//CExoLocString *(*GetFirstName)(CNWSCreature *pCreature);
-//void *(*CExoLinkedListInternal__GetFirst)(void *pList);
-//void *(*CExoLinkedListInternal__GetNext)(void *pList);
-//void *(*CExoLinkedListInternal__GetAtPos)(void *pList, int nPosition);
 dword *ppServer = 0;
 void *pServer = 0;
 void *pServerExo = 0;
@@ -72,49 +66,7 @@ char scriptRun = 0;
 unsigned char d_jmp_code[] = "\x68\x60\x70\x80\x90"       /* push dword 0x90807060 */
                              "\xc3\x90\x90\x90\x90";//x00 /* ret , nop , nop       */
 
-unsigned char d_ret_code_db[0x20];
-unsigned char d_ret_code_sd[0x20];
 unsigned char d_ret_code_nm[0x20];
-
-//################################################################
-
-void *CExoLinkedListInternal__GetFirst(void **pList)
-{
-    if (!pList) return NULL;
-    return *pList;
-}
-
-void *CExoLinkedListInternal__GetLast(void **pList)
-{
-    if (!pList) return NULL;
-    return *(pList + 1);
-}
-
-int CExoLinkedListInternal__GetSize(void *pList)
-{
-    if (!pList) return -1;
-    return *((int *)pList + 2);
-}
-
-void *CExoLinkedListInternal__GetAtPos(void *pList, void **pListItem)
-{
-    if (!pListItem) return NULL;
-    return *(pListItem + 2);
-}
-
-void *CExoLinkedListInternal__GetNext(void *pList, void **ppListItem)
-{
-    if (!ppListItem) return NULL;
-    void **pListItem = (void **) *ppListItem;
-    if (!pListItem) return NULL;
-    if (*(pListItem + 1)) {
-        *ppListItem = *(pListItem + 1);
-        return *(*(void ***)ppListItem + 2);
-    } else {
-        ppListItem = NULL;
-        return NULL;
-    }
-}
 
 //################################################################
 
@@ -124,11 +76,6 @@ void *GetObjectByID(dword ObjID)
     void *pObject;
     pGetObjByOID(pObjectClass, ObjID, &pObject);
     return pObject;
-}
-
-long GetOIDByObj(void *pObject)
-{
-    return *((dword*)pObject + 0x4);
 }
 
 void *GetPlayer(dword ObjID)
@@ -177,11 +124,11 @@ void SendNewName(dword nPlayerObjID, dword nObjID)
     dword length;
     if (!pServerMessage || !pPlayer || !pObject || pObject->ObjectType != 5) return;
     //pSendNewName(pServerMessage, pPlayer, pObject);
-    CNWMessage__CreateWriteMessage(pServerMessage, 0x400, pPlayer->Client.PlayerID, 1);
+    CNWMessage__CreateWriteMessage(pServerMessage, 0x400, pPlayer->m_nPlayerID, 1);
     CNWSMessage__WriteGameObjUpdate_UpdateObject(pServerMessage, pPlayer, (CNWSCreature *) pObject, &luo, 0, 0x400);
     CNWMessage__GetWriteMessage(pServerMessage, &pData, &length);
     if (length) {
-        CNWSMessage__SendServerToPlayerMessage(pServerMessage, pPlayer->Client.PlayerID, 5, 1, pData, length);
+        CNWSMessage__SendServerToPlayerMessage(pServerMessage, pPlayer->m_nPlayerID, 5, 1, pData, length);
     }
 }
 
@@ -193,12 +140,6 @@ void SendPlayerList(dword nPlayerObjID)
     if (!pServerMessage || !pPlayer) return;
     CNWSMessage__SendServerToPlayerPlayerList_All(pServerMessage, pPlayer);
 }
-
-/*void *GetPlayerByPID(dword nPlayerID)
-{
-	void *pPlayerList = GetPlayerList();
-	void *pPlayerListItem = CExo
-}*/
 
 char *GetServerFuncName(dword Addr)
 {
@@ -241,77 +182,12 @@ char *GetServerFuncName(dword Addr)
             Addr == 0x08230992 || Addr == 0x08230AFD) 						return "CNWVirtualMachineCommands::ExecuteCommandGetDescription";
     if (Addr == 0x08075AC0) 											return "CNWSMessage::SendServerToPlayerDungeonMasterAreaList";
     if (Addr == 0x08163C65) 											return "CNWSCreatureStats::GetFullName";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
-    //if(Addr==0x || Addr==0x) return "";
 
     return "unknown";
 }
 
-void DebugPrintHookProc(long someshit, char *str, ...)
-{
-    if (names.logDebug) {
-        va_list argList;
-        char acBuffer[2048];
-
-        va_start(argList, str);
-        vsnprintf(acBuffer, 2047, str, argList);
-        acBuffer[2047] = 0;
-        va_end(argList);
-        int nlen = strlen(acBuffer);
-        if (nlen > 0 && nlen < 2047 && acBuffer[nlen - 1] != '\n') {
-            acBuffer[nlen] = '\n';
-            acBuffer[nlen + 1] = 0;
-        }
-
-        names.Log(1, "NWNDEBUG: %s", acBuffer);
-    }
-}
-
 unsigned char ***pESP;
 int rEAX;
-
-void SendDataHookProc(void *pServerMessage, int nClientID, int type1, int type2, char *pData, int size)
-{
-    /*asm ("pusha");
-    if (type1==5 && type2==1)
-    {
-    	char *chgstr = "Bodak";
-    	int chglen = strlen(chgstr);
-    	for(int i=0; i<size-chglen-1; i++)
-    	{
-    		if(strncmp(pData+i, chgstr, chglen)==0)
-    		{
-    			strcpy(pData+i, "NaN");
-    		}
-    	}
-    }
-    asm ("popa");*/
-    //char *str = new char[size+1];
-    //memcpy(str, );
-    asm("pusha");
-    asm("movl 0x4(%ebp), %ebx");
-    asm("movl  %ebx, pESP");
-    //names.Log(1, "Packet sent\n");
-    fprintf(names.PacketData, "%p>%08X [%02X|%02X] : '", pESP, nClientID, type1, type2);
-    fwrite(pData, size, 1, names.PacketData);
-    fputs("'\n", names.PacketData);
-    fflush(names.PacketData);
-    asm("popa");
-
-    asm("leave");
-    asm("mov $d_ret_code_sd, %eax");
-    asm("jmp *%eax");
-}
 
 int GetNameHookProc(void *pObjectInfoStruct, int some_flag, char *objName_buf, int flag)
 {
@@ -630,10 +506,10 @@ int GetNameHookProc(void *pObjectInfoStruct, int some_flag, char *objName_buf, i
 
     if (pPlayerObj) {
         CNWSCreature *pCr = (CNWSCreature *)pPlayerObj;
-        if (pCr->Master != OBJECT_INVALID) {
-            void *pCreatureTmp = GetObjectByID(pCr->Master);
+        if (pCr->MasterID != OBJECT_INVALID) {
+            void *pCreatureTmp = GetObjectByID(pCr->MasterID);
             if (pCreatureTmp) {
-                nPlayerObjID = pCr->Master;
+                nPlayerObjID = pCr->MasterID;
             }
         }
     }
@@ -712,62 +588,6 @@ ext:
     return 1;
 }
 
-// 0824AA5C - runScript : 55 89 e5 57 56 53 83 ec 18 ff 75 0c e8 eb
-unsigned long
-FindHookRunScript()
-{
-    unsigned long start_addr = 0x08048000, end_addr = 0x08300000;
-    char *ptr = (char *) start_addr;
-
-    while (ptr < (char *) end_addr) {
-        if ((ptr[0] == (char) 0x55) &&
-                (ptr[1] == (char) 0x89) &&
-                (ptr[2] == (char) 0xe5) &&
-                (ptr[3] == (char) 0x57) &&
-                (ptr[4] == (char) 0x56) &&
-                (ptr[5] == (char) 0x53) &&
-                (ptr[6] == (char) 0x83) &&
-                (ptr[7] == (char) 0xec) &&
-                (ptr[8] == (char) 0x18) &&
-                (ptr[9] == (char) 0xFF) &&
-                (ptr[10] == (char) 0x75) &&
-                (ptr[11] == (char) 0x0C) &&
-                (ptr[12] == (char) 0xE8) &&
-                (ptr[0x3B] == (char) 0x84) &&
-                (ptr[0x3C] == (char) 0x01) &&
-                (ptr[0x3D] == (char) 0x00)
-           )
-            return (unsigned long) ptr;
-        else
-            ptr++;
-    }
-    return 0;
-}
-
-// grr...
-int sptr[4];
-char * gsname;
-int gObjID;
-
-void RunScript(char * sname, int ObjID)
-{
-    gsname = sname;
-    gObjID = ObjID;
-    sptr[1] = strlen(sname);
-    asm("movl $sptr, %edx");
-    asm("movl gsname, %eax");
-    asm("mov %eax, (%edx)");
-    asm("push $1");
-    asm("push gObjID");
-    asm("push %edx");
-    asm("movl pScriptThis, %ecx");
-    asm("mov (%ecx), %ecx");
-    asm("push %ecx");
-    scriptRun = 1;
-    pRunScript();
-    scriptRun = 0;
-}
-
 void
 d_enable_write(unsigned long location)
 {
@@ -812,10 +632,6 @@ void InitConstants()
 
 int HookFunctions()
 {
-    //dword org_SaveChar = FindHookSaveChar();
-    //dword org_Run = FindHookRunScript();
-    dword org_DebugPrint = 0x08094079;  //CExoDebug::NoLog(...)
-    dword org_SendData = 0x08076F10;  //CNWSMessage::SendServerToPlayerMessage(ulong,uchar,uchar,uchar *,ulong)
     dword org_GetName = 0x082CA118;  //CExoLocString::GetStringLoc(int, CExoString *, unsigned char)
     *(dword*)&d_newstrcpy = 0x082CAD34;  //CExoString::__as(CExoString const &)
     *(dword*)&GetPlayerObject = 0x0805E8B8;  //CNWSPlayer::GetGameObject(void)
@@ -830,14 +646,11 @@ int HookFunctions()
     *(dword*)&CNWSMessage__WriteGameObjUpdate_UpdateObject = 0x08071A24;
     *(dword*)&CNWMessage__GetWriteMessage = 0x080C2E54;
     *(dword*)&CNWSMessage__SendServerToPlayerMessage = 0x08076F10;
-    *(dword*)&CNWSMessage__SendServerToPlayerPlayerList_All = 0x080774E4;
 
     ppServer = (dword *) 0x0832F1F4;  //CAppManager *g_pAppManager
 
     *(dword*)&pScriptThis = (dword)((char*)ppServer - 0x8);
 
-    //d_redirect (org_DebugPrint, (unsigned long)DebugPrintHookProc, d_ret_code_db, 6);
-    //d_redirect (org_SendData, (unsigned long)SendDataHookProc, d_ret_code_sd, 12);
     d_redirect(org_GetName, (unsigned long)GetNameHookProc, d_ret_code_nm, 13);
 
     return 1;
