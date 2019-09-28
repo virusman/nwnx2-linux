@@ -704,6 +704,7 @@ int HookFunctions()
     *(dword*)&CNWSMessage__WriteGameObjUpdate_UpdateObject = 0x08071A24;
     *(dword*)&CNWMessage__GetWriteMessage = 0x080C2E54;
     *(dword*)&CNWSMessage__SendServerToPlayerMessage = 0x08076F10;
+    *(dword*)&CNWSMessage__SendServerToPlayerPlayerList_All = 0x080774E4;
 
     ppServer = (dword *) 0x0832F1F4;  //CAppManager *g_pAppManager
 
