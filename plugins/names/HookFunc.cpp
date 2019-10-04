@@ -52,6 +52,7 @@ void (*CNWMessage__GetWriteMessage)(CNWSMessage *pMessage, char **ppData, dword 
 void (*CNWSMessage__SendServerToPlayerMessage)(CNWSMessage *pMessage, dword nPlayerID, byte type, byte subtype, char *dataPtr, dword length);
 bool (*CNWSMessage__SendServerToPlayerPlayerList_Add)(CNWSMessage *pMessage, dword nPlayerId, CNWSPlayer *pNewPlayer);
 bool (*CNWSMessage__SendServerToPlayerPlayerList_All)(CNWSMessage *pMessage, CNWSPlayer *pPlayer);
+bool (*CNWSMessage__SendServerToPlayerPlayerList_All_Orig)(CNWSMessage *pMessage, CNWSPlayer *pPlayer);
 
 dword *ppServer = 0;
 void *pServer = 0;
@@ -141,7 +142,7 @@ void SendPlayerList(dword nPlayerObjID)
     CNWSMessage *pServerMessage = (CNWSMessage *) pGetServerMessage(pServerExo);
     CNWSPlayer *pPlayer = (CNWSPlayer *) GetPlayer(nPlayerObjID);
     if (!pServerMessage || !pPlayer) return;
-    CNWSMessage__SendServerToPlayerPlayerList_All(pServerMessage, pPlayer);
+    CNWSMessage__SendServerToPlayerPlayerList_All_Orig(pServerMessage, pPlayer);
 }
 
 char *GetServerFuncName(dword Addr)
@@ -704,7 +705,7 @@ int HookFunctions()
     *(dword*)&CNWSMessage__WriteGameObjUpdate_UpdateObject = 0x08071A24;
     *(dword*)&CNWMessage__GetWriteMessage = 0x080C2E54;
     *(dword*)&CNWSMessage__SendServerToPlayerMessage = 0x08076F10;
-    *(dword*)&CNWSMessage__SendServerToPlayerPlayerList_All = 0x080774E4;
+    *(dword*)&CNWSMessage__SendServerToPlayerPlayerList_All_Orig = 0x080774E4;
 
     ppServer = (dword *) 0x0832F1F4;  //CAppManager *g_pAppManager
 
