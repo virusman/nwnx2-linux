@@ -23,13 +23,9 @@
 #include "typedefs.h"
 
 int HookFunctions();
-void InitConstants();
 
-void RunScript(char * sname, int ObjID);
 void SendNewName(dword nPlayerObjID, dword nObjID);
 void SendPlayerList(dword nPlayerObjID);
-
-extern char scriptRun;
 
 enum ENameType { eFirstName, eLastName };
 

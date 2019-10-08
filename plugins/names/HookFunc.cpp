@@ -36,32 +36,12 @@ extern CNWNXNames names;
 
 const dword PLAYERID_ALL_GAMEMASTERS = -10;
 
-int (*pGetObjByOID)(void *pObjectClass, dword ObjID, void **buf);
-void *(*pRetObjByOID)(void *pServerExo, long ObjID);
-void *(*pGetPlayer)(void *pServerExo4, dword ObjID);
-void (*pRunScript)();
 char *(*d_newstrcpy)(char *buf, char **source);
 void *(*GetPlayerObject)(void *pPlayer);
-void *(*pGetPlayerByOID)(void *pThis, dword ObjID);
-void *(*pGetPlayerList)(void *pServerExo);
-void *(*pGetServerMessage)(void *pServerExo);
-void *(*GetClientObjectByPlayerId)(void *pServerExoApp, dword nClientID, unsigned char flag);
-void (*CNWMessage__CreateWriteMessage)(CNWSMessage *pMessage, dword length, dword recipient, dword flag);
-void (*CNWSMessage__WriteGameObjUpdate_UpdateObject)(CNWSMessage *pMessage, CNWSPlayer *pPlayer, CNWSCreature *pCreature, CLastUpdateObject *pLUO, dword flags, dword AppearanceFlags);
-void (*CNWMessage__GetWriteMessage)(CNWSMessage *pMessage, char **ppData, dword *pLength);
-void (*CNWSMessage__SendServerToPlayerMessage)(CNWSMessage *pMessage, dword nPlayerID, byte type, byte subtype, char *dataPtr, dword length);
 bool (*CNWSMessage__SendServerToPlayerPlayerList_Add)(CNWSMessage *pMessage, dword nPlayerId, CNWSPlayer *pNewPlayer);
 bool (*CNWSMessage__SendServerToPlayerPlayerList_All)(CNWSMessage *pMessage, CNWSPlayer *pPlayer);
 bool (*CNWSMessage__SendServerToPlayerPlayerList_All_Orig)(CNWSMessage *pMessage, CNWSPlayer *pPlayer);
 
-dword *ppServer = 0;
-void *pServer = 0;
-void *pServerExo = 0;
-void *pServerExo4 = 0;
-void *pScriptThis = 0;
-void *pObjectClass = 0;
-void *pFactionClass = 0;
-void *pClientClass = 0;
 dword oPC = 0;
 int TRACK_CALLS = 1;
 
@@ -74,73 +54,59 @@ unsigned char d_ret_code_nm[0x20];
 
 //################################################################
 
-void *GetObjectByID(dword ObjID)
+CNWSObject *GetObjectByID(dword ObjID)
 {
-    if (!pServerExo) InitConstants();
-    void *pObject;
-    pGetObjByOID(pObjectClass, ObjID, &pObject);
-    return pObject;
+    return static_cast<CNWSObject *>(g_pAppManager->ServerExoApp->GetGameObject(ObjID));
 }
 
-void *GetPlayer(dword ObjID)
+CNWSPlayer *GetPlayer(dword nPlayerObjID)
 {
-    if (!pServerExo) InitConstants();
-    return pGetPlayerByOID(pServerExo, ObjID);
+    return g_pAppManager->ServerExoApp->GetClientObjectByObjectId(nPlayerObjID);
 }
 
 void *GetPlayerByClientID(dword nClientID)
 {
-    if (!pServerExo) InitConstants();
-    return GetClientObjectByPlayerId(pServerExo, nClientID, 0);
+    return g_pAppManager->ServerExoApp->GetClientObjectByPlayerId(nClientID, 0);
 }
 
-int GetIsPC(dword ObjID)
+bool GetIsPC(dword ObjID)
 {
-    if (!pServerExo) InitConstants();
-    void *pPlayer = GetPlayer(ObjID);
-    if (pPlayer) return 1;
-    else return 0;
+    CNWSPlayer *pPlayer = GetPlayer(ObjID);
+    if (pPlayer) return true;
+    else return false;
 }
 
 int GetIsDM(dword ObjID)
 {
-    if (!pServerExo) InitConstants();
     CNWSCreature *pCreature = (CNWSCreature *) GetObjectByID(ObjID);
     if (!pCreature || !pCreature->CreatureStats) return 0;
     if (pCreature->CreatureStats->IsDM) return 1;
     else return 0;
 }
 
-void *GetPlayerList()
-{
-    if (!pServerExo) InitConstants();
-    return pGetPlayerList(pServerExo);
-}
-
 void SendNewName(dword nPlayerObjID, dword nObjID)
 {
-    if (!pServerExo) InitConstants();
-    CNWSMessage *pServerMessage = (CNWSMessage *) pGetServerMessage(pServerExo);
-    CNWSPlayer *pPlayer = (CNWSPlayer *) GetPlayer(nPlayerObjID);
-    CNWSObject *pObject = (CNWSObject *) GetObjectByID(nObjID);
-    CLastUpdateObject luo;
-    char *pData;
+    CNWSMessage *pServerMessage = g_pAppManager->ServerExoApp->GetNWSMessage();
+    CNWSPlayer *pPlayer = g_pAppManager->ServerExoApp->GetClientObjectByObjectId(nPlayerObjID);
+    CNWSObject *pObject = static_cast<CNWSObject *>(g_pAppManager->ServerExoApp->GetGameObject(nObjID));
+    unsigned char *pData;
     dword length;
     if (!pServerMessage || !pPlayer || !pObject || pObject->ObjectType != 5) return;
-    //pSendNewName(pServerMessage, pPlayer, pObject);
-    CNWMessage__CreateWriteMessage(pServerMessage, 0x400, pPlayer->m_nPlayerID, 1);
-    CNWSMessage__WriteGameObjUpdate_UpdateObject(pServerMessage, pPlayer, (CNWSCreature *) pObject, &luo, 0, 0x400);
-    CNWMessage__GetWriteMessage(pServerMessage, &pData, &length);
+    pServerMessage->CreateWriteMessage(0x400, pPlayer->m_nPlayerID, 1);
+    CLastUpdateObject *luo;
+    unsigned long objectUpdatesRequired, appearanceUpdatesRequired;
+    pServerMessage->TestObjectUpdateDifferences(pPlayer, pObject, &luo, &objectUpdatesRequired, &appearanceUpdatesRequired);
+    pServerMessage->WriteGameObjUpdate_UpdateObject(pPlayer, pObject, luo, objectUpdatesRequired, appearanceUpdatesRequired | 0x400);
+    pServerMessage->GetWriteMessage(&pData, &length);
     if (length) {
-        CNWSMessage__SendServerToPlayerMessage(pServerMessage, pPlayer->m_nPlayerID, 5, 1, pData, length);
+        pServerMessage->SendServerToPlayerMessage(pPlayer->m_nPlayerID, 5, 1, pData, length);
     }
 }
 
 void SendPlayerList(dword nPlayerObjID)
 {
-    if (!pServerExo) InitConstants();
-    CNWSMessage *pServerMessage = (CNWSMessage *) pGetServerMessage(pServerExo);
-    CNWSPlayer *pPlayer = (CNWSPlayer *) GetPlayer(nPlayerObjID);
+    CNWSMessage *pServerMessage = g_pAppManager->ServerExoApp->GetNWSMessage();
+    CNWSPlayer *pPlayer = g_pAppManager->ServerExoApp->GetClientObjectByObjectId(nPlayerObjID);
     if (!pServerMessage || !pPlayer) return;
     CNWSMessage__SendServerToPlayerPlayerList_All_Orig(pServerMessage, pPlayer);
 }
@@ -678,38 +644,12 @@ d_redirect(long from, long to, unsigned char *d_ret_code, long len = 0)
     memcpy((void *) from, (const void *) d_jmp_code, 6);
 }
 
-void InitConstants()
-{
-    *(dword*)&pServer = *ppServer; //CAppManager
-    *(dword*)&pServerExo = *(dword*)((char*)pServer + 0x4); //CServerExoApp
-    *(dword*)&pServerExo4 = *(dword*)((char*)pServerExo + 0x4); //CServerExoAppInternal
-
-    *(dword*)&pObjectClass = *(dword*)(*(dword*)((char*)pServerExo + 0x4) + 0x10080);
-    *(dword*)&pFactionClass = *(dword*)(*(dword*)((char*)pServerExo + 0x4) + 0x10074);
-    *(dword*)&pClientClass = *(dword*)(*(dword*)((char*)pServerExo + 0x4) + 0x10060);
-}
-
 int HookFunctions()
 {
     dword org_GetName = 0x082CA118;  //CExoLocString::GetStringLoc(int, CExoString *, unsigned char)
     *(dword*)&d_newstrcpy = 0x082CAD34;  //CExoString::__as(CExoString const &)
     *(dword*)&GetPlayerObject = 0x0805E8B8;  //CNWSPlayer::GetGameObject(void)
-    *(dword*)&pGetPlayerByOID = 0x080B24B8;  //CServerExoApp::GetClientObjectByObjectId(unsigned long)
-    *(dword*)&pGetPlayerList = 0x080B1F2C;  //CServerExoApp::GetPlayerList(void)
-    *(dword*)&pRetObjByOID = 0x080B1DE0;  //CServerExoApp::GetCreatureByGameObjectID(unsigned long)
-    *(dword*)&pGetServerMessage = 0x080B1F54;  //CServerExoApp::GetNWSMessage(void)
-    *(dword*)&pGetObjByOID = 0x080BB2CC;
-    *(dword*)&GetClientObjectByPlayerId = 0x080B24D0;
-
-    *(dword*)&CNWMessage__CreateWriteMessage = 0x080C3AEC;
-    *(dword*)&CNWSMessage__WriteGameObjUpdate_UpdateObject = 0x08071A24;
-    *(dword*)&CNWMessage__GetWriteMessage = 0x080C2E54;
-    *(dword*)&CNWSMessage__SendServerToPlayerMessage = 0x08076F10;
     *(dword*)&CNWSMessage__SendServerToPlayerPlayerList_All_Orig = 0x080774E4;
-
-    ppServer = (dword *) 0x0832F1F4;  //CAppManager *g_pAppManager
-
-    *(dword*)&pScriptThis = (dword)((char*)ppServer - 0x8);
 
     d_redirect(org_GetName, (unsigned long)GetNameHookProc, d_ret_code_nm, 13);
 
